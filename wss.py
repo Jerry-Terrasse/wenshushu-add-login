@@ -25,6 +25,8 @@ def login_anonymous(session):
 
 
 def download(url):
+    try_login()
+    
     def get_tid(token):
         r = s.post(
             url='https://www.wenshushu.cn/ap/task/token',
@@ -117,6 +119,8 @@ def download(url):
 
 
 def upload(filePath):
+    try_login()
+    
     chunk_size = 2097152
     file_size = os.path.getsize(filePath)
     ispart = True if file_size > chunk_size else False
@@ -388,10 +392,81 @@ def upload(filePath):
         getprocess(upId)
     upload_main()
 
+def display_login_instructions():
+    instructions = """获取X-TOKEN以便登录你自己的账号：
+1. 打开浏览器，访问 https://www.wenshushu.cn
+2. 登录你的账号
+3. 按F12打开开发者工具
+4. 切换到Network(网络)标签
+5. 刷新页面或进行任意操作
+6. 找到任意一个请求（例如/ap/user/userinfo）
+7. 查看Request Headers，找到最下方的X-TOKEN字段
+8. 复制X-TOKEN字段（大概率为27位，30B开头的字符串）
+9. 使用`python wss.py login "30Bxxxxxxxxxxxxxxxxxxxxxxxx"`登录
+"""
+    print(instructions)
+
+def write_token(token):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(script_dir, 'token.txt'), 'w') as f:
+        f.write(token)
+
+    print(f"尝试使用 X-TOKEN: {token} 登录")
+    s.headers['X-TOKEN'] = token
+    test_userinfo()
+    test_storage()
+
+def test_userinfo():
+    r = s.post(
+        url='https://www.wenshushu.cn/ap/user/userinfo',
+        json={"plat": "pcweb"}
+    )
+    if r.json()["code"] != 0:
+        print(f"登录失败，错误: {r.json()}")
+        return
+    user_data = r.json()['data']
+    print(f"登录成功")
+    if user_data['name'] != "":
+        print(f"用户名: {user_data['name']}")
+    if user_data['email'] != "":
+        print(f"邮箱: {user_data['email']}")
+    if user_data['tel'] != "":
+        print(f"手机号: {user_data['tel']}")
+
+def test_storage():
+    r = s.post(
+        url='https://www.wenshushu.cn/ap/user/storage',
+        json={}
+    )
+    if r.json()["code"] != 0:
+        print(f"登录失败，错误: {r.json()}")
+        return
+    storage_data = r.json()['data']
+    used = int(storage_data['send_space'])
+    rest = int(storage_data['rest_space'])
+    total = used + rest
+    print(f"当前已用空间: {round(used / 1024**3, 2)}GB")
+    print(f"剩余空间: {round(rest / 1024**3, 2)}GB")
+    print(f"总空间: {round(total / 1024**3, 2)}GB")
+    
+def try_login():
+    # try to login with token.txt
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if os.path.exists(os.path.join(script_dir, 'token.txt')):
+        with open(os.path.join(script_dir, 'token.txt'), 'r') as f:
+            token = f.read()
+        print(f"尝试使用已保存的 X-TOKEN: {token} 登录")
+        s.headers['X-TOKEN'] = token
+        test_userinfo()
+        test_storage()
+        print()
+    else:
+        print("未找到 token.txt，使用匿名登录")
+        s.headers['X-TOKEN'] = login_anonymous(s)
 
 if __name__ == "__main__":
     s = requests.Session()
-    s.headers['X-TOKEN'] = login_anonymous(s)
+    # s.headers['X-TOKEN'] = login_anonymous(s)
     s.headers['User-Agent'] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:82.0) Gecko/20100101 Firefox/82.0"
     s.headers['Accept-Language'] = "en-US, en;q=0.9"  # NOTE: require header, otherwise return {"code":-1, ...}
     try:
@@ -402,9 +477,16 @@ if __name__ == "__main__":
         elif command.lower() in ['download', 'd']:
             url = sys.argv[2]
             download(url)
+        elif command.lower() in ['login', 'l']:
+            if len(sys.argv) <= 2:
+                display_login_instructions()
+            else:
+                token = sys.argv[2]
+                write_token(token)
     except IndexError:
         print('请输入正确命令\n',
               '上传:[python wss.py upload "file.exe"]\n',
-              '下载:[python wss.py download "url"]')
+              '下载:[python wss.py download "url"]\n',
+              '登录:[python wss.py login "X-TOKEN"]')
     except Exception as e:
         traceback.print_exc()
