@@ -23,7 +23,16 @@ python wss.py upload xxx.file
 python wss.py download https://wss1.cn/f/xxxxxxxxxxx
 ```
 
-#### 4. 返回
+#### 4. 登录
+
+```shell
+python wss.py login # 查看登录帮助
+python wss.py login "X-TOKEN" # 使用 X-TOKEN 登录
+```
+
+注：用自己的账号登录后，可以使用更大空间；如果不登录会自动使用匿名登录，空间限制为 5GB。
+
+#### 5. 返回
 
 管理链接可以用来销毁文件，分享文件，续期文件。
 
